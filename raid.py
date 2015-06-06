@@ -339,7 +339,6 @@ def restore_stripe(stripe_num, absent_agent_set):
         a = np.array(a_list)
         b = np.array(b_list)
         x = lin.solve(a, b)
-        print x
         
         decision_num = 0
         for absent_data_agent_num in absent_data_agent_set:
