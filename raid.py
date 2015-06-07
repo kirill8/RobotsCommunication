@@ -25,14 +25,18 @@ global photo_count
 global local_voting_param
 global compare_param
 global timeout_param
+global number_size_param
+global number_format_param
 
-timeout_param = 100
-compare_param = 0.4
+timeout_param = 1000
+compare_param = 0.1
 local_voting_param = 0.1
 
 file_type_param = 'png'
-file_size_min_param = 50
-file_size_max_param = 150
+file_size_min_param = 200
+file_size_max_param = 300
+number_size_param = 4
+number_format_param = 'I'
 
 mode = int(sys.argv[1])
 agent_count = int(sys.argv[2])
@@ -144,13 +148,13 @@ def read_data_file(agent, agent_size, stripe_num):
     count = len(fdata)
     agent.average = []
     for data_num in range(agent_size):
-        if (data_num + 1) * 4 <= count:
-            data = fdata[data_num * 4:(data_num + 1) * 4]
-            number = unpack('I', data)[0]
-        elif data_num * 4 <= count:
-            data = fdata[data_num * 4:]
-            data = data.ljust(4, '\x00')
-            number = unpack('I', data)[0]
+        if (data_num + 1) * number_size_param <= count:
+            data = fdata[data_num * number_size_param:(data_num + 1) * number_size_param]
+            number = unpack(number_format_param, data)[0]
+        elif data_num * number_size_param <= count:
+            data = fdata[data_num * number_size_param:]
+            data = data.ljust(number_size_param, '\x00')
+            number = unpack(number_format_param, data)[0]
         else:
             number = 0
         agent.average.append(float(number)) 
@@ -209,7 +213,7 @@ def write_data_file(agent, meta, stripe_num):
     fsize = meta.fsize_list[buffer_num]
     fdata = ''
     for data in agent.average:
-        fdata += pack('I', int(data))
+        fdata += pack(number_format_param, int(data))
     fdata = fdata[:fsize]
 
     fname = '{}/{}.{}'.format(agent.number, 
@@ -310,7 +314,7 @@ def restore_stripe(stripe_num, absent_agent_set):
         elif agent.number in present_synd_agent_set:
             read_syndrom(agent, meta.agent_size, stripe_num)
         else:
-            agent.average = [0.0] * meta.agent_size
+            agent.average = [0] * meta.agent_size
     
     for present_synd_agent_num in present_synd_agent_set:
         present_synd_num = present_synd_dict[present_synd_agent_num]
@@ -339,12 +343,11 @@ def restore_stripe(stripe_num, absent_agent_set):
         a = np.array(a_list)
         b = np.array(b_list)
         x = lin.solve(a, b)
-        print x
         
         decision_num = 0
         for absent_data_agent_num in absent_data_agent_set:
             agent = agent_list[absent_data_agent_num]
-            agent.average[data_num] = x[decision_num]
+            agent.average[data_num] = round(x[decision_num])
             decision_num += 1
     
     for absent_data_agent_num in absent_data_agent_set:
@@ -383,7 +386,7 @@ def calculate_syndrom(stripe_num, synd_num):
                 check_data_file(agent, meta, stripe_num)
             
             if token.agent_num == agent_count - 1:
-                meta.agent_size = (meta.agent_size + 3) / 4
+                meta.agent_size = (meta.agent_size + number_size_param - 1) / number_size_param
                 token.state = 'init'
                 token.agent_num = 0
             else:
@@ -412,6 +415,7 @@ def calculate_syndrom(stripe_num, synd_num):
             write_meta_file(agent, meta, stripe_num)
             
             if token.agent_num == agent_count - 1:
+                print token.count
                 break
             else:
                 token.agent_num += 1
